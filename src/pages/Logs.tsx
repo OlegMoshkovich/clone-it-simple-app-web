@@ -153,10 +153,10 @@ const Logs: React.FC = () => {
         {filteredLogs.map((log) => (
           <Card
             key={log.id}
-            className="cursor-pointer hover:shadow-lg transition-shadow"
+            className="cursor-pointer hover:shadow-lg transition-shadow flex flex-col h-full"
             onClick={() => handleCardClick(log.id)}
           >
-            <CardHeader>
+            <CardHeader className="flex-shrink-0">
               <div className="flex justify-between items-start">
                 <CardTitle className="text-lg font-semibold text-gray-900 line-clamp-2">
                   {log.title}
@@ -166,8 +166,8 @@ const Logs: React.FC = () => {
                 </span>
               </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+            <CardContent className="flex-grow flex flex-col">
+              <p className="text-gray-600 text-sm mb-4 line-clamp-3 flex-grow">
                 {log.description}
               </p>
               
@@ -181,7 +181,7 @@ const Logs: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 mt-auto">
                 <Button
                   size="sm"
                   variant="outline"
