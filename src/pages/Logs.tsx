@@ -5,20 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Search, FileText, Eye, Edit, Trash2, Paperclip, Loader2 } from 'lucide-react';
-
-interface Log {
-  id: string;
-  title: string;
-  description: string;
-  status: 'completed' | 'in-progress' | 'pending';
-  createdAt: string;
-  updatedAt: string;
-  attachments?: Array<{
-    id: string;
-    filename: string;
-    url: string;
-  }>;
-}
+import { Log } from '../types';
 
 const Logs: React.FC = () => {
   const [logs, setLogs] = useState<Log[]>([]);

@@ -4,221 +4,158 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { FileText, Calendar, Download, Sparkles, Clock, TrendingUp, ExternalLink, Loader2 } from 'lucide-react';
-
-interface ReportType {
-  id: string;
-  name: string;
-  description: string;
-  duration: string;
-  icon: string;
-}
-
-interface SavedReport {
-  id: string;
-  name: string;
-  reportType: string;
-  duration: string;
-  generatedAt: string;
-  logCount: number;
-  startDate?: string;
-  endDate?: string;
-}
-
-interface GeneratedReport {
-  id: string;
-  reportType: string;
-  duration: string;
-  generatedAt: string;
-  logCount: number;
-  summary: string;
-  startDate?: string;
-  endDate?: string;
-  logs?: Array<{
-    id: string;
-    title: string;
-    description: string;
-    status: string;
-    priority: string;
-    createdAt: string;
-  }>;
-}
-
-interface CustomDates {
-  startDate: string;
-  endDate: string;
-}
+import { BarChart3, Calendar, Download, FileText, TrendingUp, Users, AlertTriangle, Clock, CheckCircle, Loader2 } from 'lucide-react';
+import { ReportType, SavedReport, GeneratedReport, CustomDates, TabType } from '../types';
 
 const Reports: React.FC = () => {
   const router = useRouter();
-  const [reportTypes, setReportTypes] = useState<ReportType[] | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('generate');
+  const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
   const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
-  const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [customDates, setCustomDates] = useState<CustomDates>({
     startDate: '',
     endDate: ''
   });
-  const [loading, setLoading] = useState(false);
-  const [generatedReport, setGeneratedReport] = useState<GeneratedReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'generate' | 'saved'>('generate');
-  const [isLoadingReports, setIsLoadingReports] = useState(true);
 
   useEffect(() => {
-    fetchReportTypes();
+    const fetchReportsData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('http://localhost:3001/api/reports');
+        if (!response.ok) {
+          throw new Error('Failed to fetch reports data');
+        }
+        const data = await response.json();
+        setReportTypes(data.reportTypes || []);
+        setSavedReports(data.savedReports || []);
+      } catch (err) {
+        console.error('Error fetching reports data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReportsData();
   }, []);
 
-  const fetchReportTypes = async () => {
+  const handleGenerateReport = async (reportType: ReportType) => {
     try {
-      setIsLoadingReports(true);
-      const response = await fetch('http://localhost:3001/api/reports');
-      if (!response.ok) {
-        throw new Error('Failed to fetch report types');
-      }
-      const data = await response.json();
-      setReportTypes(data.reportTypes);
-      setSavedReports(data.savedReports);
-    } catch (err) {
-      console.error('Error fetching report types:', err);
-      setError('Failed to load report types');
-    } finally {
-      setIsLoadingReports(false);
-    }
-  };
-
-  const generateReport = async () => {
-    if (!selectedReport) {
-      setError('Please select a report type');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const reportData = {
-        duration: selectedReport.duration,
-        reportType: selectedReport.id,
-        ...(selectedReport.duration === 'custom' && {
-          startDate: customDates.startDate,
-          endDate: customDates.endDate
-        })
+      setGenerating(true);
+      
+      const payload: any = {
+        reportType: reportType.id,
+        duration: reportType.duration
       };
+
+      // Add custom dates if they're provided
+      if (customDates.startDate && customDates.endDate) {
+        payload.startDate = customDates.startDate;
+        payload.endDate = customDates.endDate;
+      }
 
       const response = await fetch('http://localhost:3001/api/reports/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(reportData)
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         throw new Error('Failed to generate report');
       }
 
-      const report = await response.json();
-      setGeneratedReport(report);
-      
-      // Refresh the saved reports list to update the count
-      await fetchReportTypes();
+      const result = await response.json();
+      setGeneratedReport(result);
     } catch (err) {
       console.error('Error generating report:', err);
-      setError('Failed to generate report. Please try again.');
+      alert('Failed to generate report. Please try again.');
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   };
 
-  const downloadReport = () => {
-    if (!generatedReport) return;
+  const handleSaveReport = async (report: GeneratedReport) => {
+    const name = prompt('Enter a name for this report:');
+    if (!name) return;
 
-    const reportText = `
-CONSTRUCTION SITE REPORT
-${'='.repeat(50)}
+    try {
+      const response = await fetch('http://localhost:3001/api/reports/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...report,
+          name
+        }),
+      });
 
-Report Type: ${generatedReport.reportType}
-Duration: ${generatedReport.duration}
-Generated: ${new Date(generatedReport.generatedAt).toISOString().split('T')[0]}
-Log Count: ${generatedReport.logCount}
+      if (!response.ok) {
+        throw new Error('Failed to save report');
+      }
 
-${generatedReport.startDate && generatedReport.endDate ? 
-  `Date Range: ${generatedReport.startDate} to ${generatedReport.endDate}` : ''}
+      // Refresh saved reports
+      const reportsResponse = await fetch('http://localhost:3001/api/reports');
+      if (reportsResponse.ok) {
+        const data = await reportsResponse.json();
+        setSavedReports(data.savedReports || []);
+      }
 
-SUMMARY
-${'-'.repeat(20)}
-${generatedReport.summary}
-
-DETAILED LOGS
-${'-'.repeat(20)}
-${generatedReport.logs?.map((log: any) => `
-${log.title}
-${'-'.repeat(30)}
-Status: ${log.status}
-Priority: ${log.priority}
-Date: ${new Date(log.createdAt).toLocaleDateString()}
-Description: ${log.description}
-`).join('\n') || 'No logs found'}
-
-${'='.repeat(50)}
-Generated by Construction Log Management System
-`;
-
-    const blob = new Blob([reportText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `construction-report-${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      alert('Report saved successfully!');
+    } catch (err) {
+      console.error('Error saving report:', err);
+      alert('Failed to save report. Please try again.');
+    }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const handleLogClick = (logId: string) => {
-    router.push(`/logs/${logId}`);
-  };
-
-  const handleSavedReportClick = (report: SavedReport) => {
-    setGeneratedReport({
-      id: report.id,
-      reportType: report.reportType,
-      duration: report.duration,
-      generatedAt: report.generatedAt,
-      logCount: report.logCount,
-      summary: 'Report summary will be loaded here...',
-      startDate: report.startDate,
-      endDate: report.endDate
-    });
-    setActiveTab('generate');
-  };
-
-  const handleDeleteReport = async (reportId: string) => {
-    const isConfirmed = window.confirm('Are you sure you want to delete this report?');
+  const handleDeleteSavedReport = async (reportId: string) => {
+    const isConfirmed = window.confirm('Are you sure you want to delete this saved report?');
     if (!isConfirmed) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/reports/${reportId}`, {
+      const response = await fetch(`http://localhost:3001/api/reports/saved/${reportId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete report');
+        throw new Error('Failed to delete saved report');
       }
 
-      // Remove from saved reports
+      // Remove from state
       setSavedReports(prev => prev.filter(report => report.id !== reportId));
+      alert('Report deleted successfully!');
     } catch (err) {
-      console.error('Error deleting report:', err);
+      console.error('Error deleting saved report:', err);
       alert('Failed to delete report. Please try again.');
     }
   };
 
-  if (isLoadingReports) {
+  const getReportIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'bar-chart':
+        return <BarChart3 className="w-5 h-5" />;
+      case 'calendar':
+        return <Calendar className="w-5 h-5" />;
+      case 'trending-up':
+        return <TrendingUp className="w-5 h-5" />;
+      case 'users':
+        return <Users className="w-5 h-5" />;
+      case 'alert-triangle':
+        return <AlertTriangle className="w-5 h-5" />;
+      case 'clock':
+        return <Clock className="w-5 h-5" />;
+      case 'check-circle':
+        return <CheckCircle className="w-5 h-5" />;
+      default:
+        return <FileText className="w-5 h-5" />;
+    }
+  };
+
+  if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center h-64">
@@ -235,252 +172,237 @@ Generated by Construction Log Management System
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
-            <span className="text-sm text-gray-600">Construction Insights</span>
-          </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
           <button
             onClick={() => setActiveTab('generate')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'generate'
-                ? 'bg-white text-blue-700 shadow-sm'
+                ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Generate Report
+            Generate Reports
           </button>
           <button
             onClick={() => setActiveTab('saved')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'saved'
-                ? 'bg-white text-blue-700 shadow-sm'
+                ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Saved Reports ({savedReports.length})
+            Saved Reports
           </button>
         </div>
 
-        {activeTab === 'generate' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Report Types */}
-            <div className="lg:col-span-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Report Types
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {reportTypes?.map((reportType) => (
-                    <div
-                      key={reportType.id}
-                      onClick={() => setSelectedReport(reportType)}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedReport?.id === reportType.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{reportType.name}</h3>
-                          <p className="text-sm text-gray-600">{reportType.description}</p>
-                        </div>
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                          {reportType.duration}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              {/* Custom Date Range */}
-              {selectedReport?.duration === 'custom' && (
-                <Card className="mt-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Calendar className="w-5 h-5 mr-2" />
-                      Date Range
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={customDates.startDate}
-                        onChange={(e) => setCustomDates(prev => ({ ...prev, startDate: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={customDates.endDate}
-                        onChange={(e) => setCustomDates(prev => ({ ...prev, endDate: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Generate Button */}
-              <div className="mt-6">
-                <Button
-                  onClick={generateReport}
-                  disabled={loading || !selectedReport}
-                  className="w-full"
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 mr-2" />
-                  )}
-                  Generate Report
-                </Button>
-              </div>
-            </div>
-
-            {/* Generated Report */}
-            <div className="lg:col-span-2">
-              {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-700">{error}</p>
+        {activeTab === 'generate' && (
+          <div className="space-y-6">
+            {/* Custom Date Range */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Custom Date Range (Optional)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={customDates.startDate}
+                      onChange={(e) => setCustomDates(prev => ({ ...prev, startDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={customDates.endDate}
+                      onChange={(e) => setCustomDates(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
-              )}
+              </CardContent>
+            </Card>
 
-              {generatedReport ? (
-                <Card>
+            {/* Report Types */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {reportTypes.map((reportType) => (
+                <Card key={reportType.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
-                    <div className="flex justify-between items-center">
-                      <CardTitle>Generated Report</CardTitle>
-                      <Button onClick={downloadReport} variant="outline" size="sm">
-                        <Download className="w-4 h-4 mr-2" />
-                        Download
-                      </Button>
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        {getReportIcon(reportType.icon)}
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">{reportType.name}</CardTitle>
+                        <p className="text-sm text-gray-600">{reportType.duration}</p>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-2xl font-bold text-blue-600">{generatedReport.logCount}</div>
-                          <div className="text-sm text-gray-600">Total Logs</div>
-                        </div>
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-sm font-medium text-gray-900">{generatedReport.reportType}</div>
-                          <div className="text-sm text-gray-600">Report Type</div>
-                        </div>
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-sm font-medium text-gray-900">{generatedReport.duration}</div>
-                          <div className="text-sm text-gray-600">Duration</div>
-                        </div>
-                        <div className="text-center p-3 bg-gray-50 rounded-lg">
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatDate(generatedReport.generatedAt)}
-                          </div>
-                          <div className="text-sm text-gray-600">Generated</div>
-                        </div>
-                      </div>
+                    <p className="text-gray-600 text-sm mb-4">{reportType.description}</p>
+                    <Button
+                      onClick={() => handleGenerateReport(reportType)}
+                      disabled={generating}
+                      className="w-full"
+                    >
+                      {generating ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                      )}
+                      Generate Report
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
 
-                      <div>
-                        <h3 className="font-semibold text-gray-900 mb-2">Summary</h3>
-                        <p className="text-gray-700 whitespace-pre-wrap">{generatedReport.summary}</p>
+            {/* Generated Report */}
+            {generatedReport && (
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Generated Report</CardTitle>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => handleSaveReport(generatedReport)}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Save Report
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setGeneratedReport(null)}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <p className="text-sm font-medium text-gray-600">Report Type</p>
+                        <p className="text-lg font-semibold">{generatedReport.reportType}</p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <p className="text-sm font-medium text-gray-600">Duration</p>
+                        <p className="text-lg font-semibold">{generatedReport.duration}</p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <p className="text-sm font-medium text-gray-600">Log Count</p>
+                        <p className="text-lg font-semibold">{generatedReport.logCount}</p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Report Generated</h3>
-                    <p className="text-gray-600">
-                      Select a report type and click "Generate Report" to create your first report.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                    
+                    <div>
+                      <h4 className="font-semibold mb-2">Summary</h4>
+                      <p className="text-gray-700 whitespace-pre-wrap">{generatedReport.summary}</p>
+                    </div>
+
+                    {generatedReport.logs && generatedReport.logs.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-2">Recent Logs</h4>
+                        <div className="space-y-2">
+                          {generatedReport.logs.slice(0, 5).map((log) => (
+                            <div key={log.id} className="p-3 border rounded-lg">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-medium">{log.title}</p>
+                                  <p className="text-sm text-gray-600">{log.description}</p>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    log.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                    log.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {log.status}
+                                  </span>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    log.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                                    log.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                                    log.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-green-100 text-green-800'
+                                  }`}>
+                                    {log.priority}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-        ) : (
-          /* Saved Reports */
-          <div>
+        )}
+
+        {activeTab === 'saved' && (
+          <div className="space-y-6">
             {savedReports.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {savedReports.map((report) => (
-                  <Card key={report.id} className="cursor-pointer hover:shadow-lg transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
+                  <Card key={report.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-semibold text-gray-900">{report.name}</h3>
+                          <CardTitle className="text-lg">{report.name}</CardTitle>
                           <p className="text-sm text-gray-600">{report.reportType}</p>
                         </div>
                         <Button
-                          variant="ghost"
                           size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteReport(report.id);
-                          }}
+                          variant="outline"
+                          onClick={() => handleDeleteSavedReport(report.id)}
                         >
-                          ×
+                          Delete
                         </Button>
                       </div>
-                      
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Duration:</span>
                           <span className="font-medium">{report.duration}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Logs:</span>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Log Count:</span>
                           <span className="font-medium">{report.logCount}</span>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Generated:</span>
-                          <span className="font-medium">{formatDate(report.generatedAt)}</span>
+                          <span className="font-medium">
+                            {new Date(report.generatedAt).toLocaleDateString()}
+                          </span>
                         </div>
-                      </div>
-
-                      <div className="mt-4 flex space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSavedReportClick(report)}
-                          className="flex-1"
-                        >
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          View
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : (
-              <Card>
-                <CardContent className="text-center py-12">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Saved Reports</h3>
-                  <p className="text-gray-600">
-                    Generate your first report to see it here.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="text-center py-12">
+                <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No saved reports</h3>
+                <p className="text-gray-600">
+                  Generate and save reports to see them here
+                </p>
+              </div>
             )}
           </div>
         )}

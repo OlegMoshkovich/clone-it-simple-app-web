@@ -1,95 +1,110 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { Upload, X, FileText, Image, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
-import { Upload, X, FileText, Image, File } from 'lucide-react';
-
-interface FileUploadProps {
-  logId: string;
-  onUploadSuccess?: () => void;
-}
+import { FileUploadProps } from '../types';
 
 const FileUpload: React.FC<FileUploadProps> = ({ logId, onUploadSuccess }) => {
-  const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    setUploading(true);
-    
-    try {
-      for (const file of files) {
-        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
-        
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`http://localhost:3001/api/logs/${logId}/attachments`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        console.log('Upload response status:', response.status);
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('Upload error:', errorData);
-          throw new Error(errorData.message || `Upload failed with status ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log('File uploaded successfully:', result);
-      }
-
-      // Refresh the log data to show new attachments
-      if (onUploadSuccess) {
-        onUploadSuccess();
-      }
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      alert(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
+    if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
-    } else if (e.type === 'dragleave') {
+    } else if (e.type === "dragleave") {
       setDragActive(false);
     }
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files);
+      handleFiles(e.dataTransfer.files);
     }
+  }, []);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      handleFiles(e.target.files);
+    }
+  }, []);
+
+  const handleFiles = async (files: FileList) => {
+    const fileArray = Array.from(files);
+    setUploadedFiles(prev => [...prev, ...fileArray]);
+    
+    await uploadFiles(fileArray);
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    setUploading(true);
+    
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('logId', logId);
+
+        const response = await fetch('http://localhost:3001/api/attachments', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        console.log(`Successfully uploaded ${file.name}`);
+      }
+
+      // Clear uploaded files after successful upload
+      setUploadedFiles([]);
+      
+      // Call the success callback if provided
+      if (onUploadSuccess) {
+        onUploadSuccess();
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload files. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const getFileIcon = (file: File) => {
     if (file.type.startsWith('image/')) {
       return <Image className="w-4 h-4" />;
-    } else if (file.type === 'application/pdf') {
-      return <FileText className="w-4 h-4" />;
-    } else {
-      return <File className="w-4 h-4" />;
     }
+    return <FileText className="w-4 h-4" />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full">
       <div
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+        className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragActive 
-            ? 'border-blue-400 bg-blue-50' 
+            ? 'border-blue-500 bg-blue-50' 
             : 'border-gray-300 hover:border-gray-400'
         }`}
         onDragEnter={handleDrag}
@@ -97,33 +112,72 @@ const FileUpload: React.FC<FileUploadProps> = ({ logId, onUploadSuccess }) => {
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-        <div className="text-sm text-gray-600 mb-2">
-          <label htmlFor="file-upload" className="cursor-pointer">
-            <span className="font-medium text-blue-600 hover:text-blue-500">
-              Click to upload
-            </span>{' '}
-            or drag and drop
-          </label>
-          <input
-            id="file-upload"
-            name="file-upload"
-            type="file"
-            className="sr-only"
-            multiple
-            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-            onChange={(e) => handleFileUpload(e.target.files)}
-            disabled={uploading}
-          />
+        <input
+          ref={(input) => {
+            if (input) {
+              input.setAttribute('webkitdirectory', '');
+              input.setAttribute('directory', '');
+            }
+          }}
+          type="file"
+          multiple
+          onChange={handleChange}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          disabled={uploading}
+        />
+        
+        <div className="space-y-2">
+          <Upload className="mx-auto h-8 w-8 text-gray-400" />
+          <div>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium text-blue-600 hover:text-blue-500">
+                Click to upload
+              </span>{' '}
+              or drag and drop
+            </p>
+            <p className="text-xs text-gray-500">
+              Images, PDFs, documents, and other files up to 10MB
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-gray-500">
-          PNG, JPG, GIF, PDF, DOC, XLS, TXT up to 10MB
-        </p>
       </div>
-      
+
+      {/* Upload Progress */}
       {uploading && (
-        <div className="text-center text-sm text-gray-600">
-          Uploading files...
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+            <span className="text-sm text-blue-600">Uploading files...</span>
+          </div>
+        </div>
+      )}
+
+      {/* File List */}
+      {uploadedFiles.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h4 className="text-sm font-medium text-gray-700">Files to upload:</h4>
+          {uploadedFiles.map((file, index) => (
+            <div
+              key={index}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+            >
+              <div className="flex items-center space-x-3">
+                {getFileIcon(file)}
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                  <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => removeFile(index)}
+                disabled={uploading}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>

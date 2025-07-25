@@ -6,30 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { ArrowLeft, Edit, FileText, Calendar, Tag, User, Clock, Trash2, Plus, Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
-
-interface Attachment {
-  id: string;
-  filename: string;
-  originalName: string;
-  mimeType: string;
-  size: number;
-  url: string;
-}
-
-interface Log {
-  id: string;
-  title: string;
-  description: string;
-  status: 'completed' | 'in-progress' | 'pending';
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  createdAt: string;
-  updatedAt: string;
-  attachments?: Attachment[];
-}
-
-interface LogDetailProps {
-  logId: string;
-}
+import { Log, Attachment, LogDetailProps } from '../types';
 
 const LogDetail: React.FC<LogDetailProps> = ({ logId }) => {
   const router = useRouter();

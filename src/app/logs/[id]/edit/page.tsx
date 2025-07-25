@@ -1,10 +1,5 @@
 import CreateLog from '../../../../pages/CreateLog';
-
-interface EditLogPageProps {
-  params: {
-    id: string;
-  };
-}
+import { EditLogPageProps } from '../../../../types';
 
 export default function EditLogPage({ params }: EditLogPageProps) {
   return <CreateLog logId={params.id} />;

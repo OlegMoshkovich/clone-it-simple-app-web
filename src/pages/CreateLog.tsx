@@ -5,24 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { ArrowLeft, Save, Plus, Sparkles, Loader2 } from 'lucide-react';
-
-interface FormData {
-  title: string;
-  description: string;
-  category: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
-  tags: string;
-  date: string;
-  inspector: string;
-  location: string;
-  notes: string;
-  aiSummary: string;
-}
-
-interface CreateLogProps {
-  logId?: string;
-}
+import { FormData, CreateLogProps, CATEGORIES, PRIORITIES, STATUSES } from '../types';
 
 const CreateLog: React.FC<CreateLogProps> = ({ logId }) => {
   const router = useRouter();
@@ -44,33 +27,6 @@ const CreateLog: React.FC<CreateLogProps> = ({ logId }) => {
     notes: '',
     aiSummary: ''
   });
-
-  const categories = [
-    'inspection',
-    'installation',
-    'maintenance',
-    'safety',
-    'electrical',
-    'plumbing',
-    'hvac',
-    'structural',
-    'roofing',
-    'security'
-  ];
-
-  const priorities = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'critical', label: 'Critical' }
-  ];
-
-  const statuses = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'in-progress', label: 'In Progress' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' }
-  ];
 
   useEffect(() => {
     if (isEditMode && logId) {
@@ -305,7 +261,7 @@ const CreateLog: React.FC<CreateLogProps> = ({ logId }) => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Select a category</option>
-                    {categories.map(category => (
+                    {CATEGORIES.map(category => (
                       <option key={category} value={category}>
                         {category.charAt(0).toUpperCase() + category.slice(1)}
                       </option>
@@ -348,7 +304,7 @@ const CreateLog: React.FC<CreateLogProps> = ({ logId }) => {
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    {statuses.map(status => (
+                    {STATUSES.map(status => (
                       <option key={status.value} value={status.value}>
                         {status.label}
                       </option>
@@ -367,7 +323,7 @@ const CreateLog: React.FC<CreateLogProps> = ({ logId }) => {
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    {priorities.map(priority => (
+                    {PRIORITIES.map(priority => (
                       <option key={priority.value} value={priority.value}>
                         {priority.label}
                       </option>
